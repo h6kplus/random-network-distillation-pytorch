@@ -93,18 +93,18 @@ def main():
         use_gae=use_gae,
         use_noisy_net=use_noisy_net
     )
-
-    if is_load_model:
-        print('load model...')
-        if use_cuda:
-            agent.model.load_state_dict(torch.load(model_path))
-            agent.rnd.predictor.load_state_dict(torch.load(predictor_path))
-            agent.rnd.target.load_state_dict(torch.load(target_path))
-        else:
-            agent.model.load_state_dict(torch.load(model_path, map_location='cpu'))
-            agent.rnd.predictor.load_state_dict(torch.load(predictor_path, map_location='cpu'))
-            agent.rnd.target.load_state_dict(torch.load(target_path, map_location='cpu'))
-        print('load finished!')
+    print(use_cuda)
+    # if is_load_model:
+    #     print('load model...')
+    #     if use_cuda:
+    #         agent.model.load_state_dict(torch.load(model_path))
+    #         agent.rnd.predictor.load_state_dict(torch.load(predictor_path))
+    #         agent.rnd.target.load_state_dict(torch.load(target_path))
+    #     else:
+    #         agent.model.load_state_dict(torch.load(model_path, map_location='cpu'))
+    #         agent.rnd.predictor.load_state_dict(torch.load(predictor_path, map_location='cpu'))
+    #         agent.rnd.target.load_state_dict(torch.load(target_path, map_location='cpu'))
+    #     print('load finished!')
 
     works = []
     parent_conns = []

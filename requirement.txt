@@ -1,0 +1,7 @@
+gym[atari,accept-rom-license]==0.21.0
+opencv-python
+gym_super_mario_bros
+tensorboardX
+torch 
+torchvision 
+torchaudio

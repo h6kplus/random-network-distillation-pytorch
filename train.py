@@ -182,8 +182,10 @@ def main():
             # total reward = int reward + ext Reward
             intrinsic_reward = agent.compute_intrinsic_reward(
                 ((next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5))
+            print(((next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5).shape)
+            print(intrinsic_reward.shape)
             # TODO
-            # change to 
+            # change to video input
             
             
             intrinsic_reward = np.hstack(intrinsic_reward)
@@ -270,10 +272,19 @@ def main():
         # -----------------------------------------------
 
         # Step 4. update obs normalize param
+        
+            # TODO
+            # change to video rms
+            
+            
         obs_rms.update(total_next_obs)
         # -----------------------------------------------
 
         # Step 5. Training!
+            # TODO
+            # change to video input
+            
+            
         agent.train_model(np.float32(total_state) / 255., ext_target, int_target, total_action,
                           total_adv, ((total_next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5),
                           total_policy)

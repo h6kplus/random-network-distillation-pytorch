@@ -79,6 +79,8 @@ class RNDAgent(object):
         target_next_feature = self.rnd.target(next_obs)
         predict_next_feature = self.rnd.predictor(next_obs)
         intrinsic_reward = (target_next_feature - predict_next_feature).pow(2).sum(1) / 2
+        # TODO
+        # change to CRW forward loss
 
         return intrinsic_reward.data.cpu().numpy()
 

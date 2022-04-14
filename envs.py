@@ -33,9 +33,11 @@ class Environment(Process):
     @abstractmethod
     def pre_proc(self, x):
         pass
-
     @abstractmethod
-    def get_init_state(self, x):
+    def to_patch(self, X):
+        pass     
+    @abstractmethod
+    def get_init_state(self, x,y):
         pass
 
 
@@ -119,16 +121,24 @@ class AtariEnvironment(Environment):
             env_idx,
             child_conn,
             history_size=4,
+            video_size=2,
+            patch_size=4,
+            life_done=False,
             h=84,
             w=84,
-            life_done=True,
+            video_h=160,
+            video_w=160,
+            patch_h=64,
+            patch_w=64,
             sticky_action=True,
+            device="cpu",
             p=0.25):
         super(AtariEnvironment, self).__init__()
         self.daemon = True
         self.env = MaxAndSkipEnv(gym.make(env_id), is_render)
         if 'Montezuma' in env_id:
             self.env = MontezumaInfoWrapper(self.env, room_address=3 if 'Montezuma' in env_id else 1)
+        
         self.env_id = env_id
         self.is_render = is_render
         self.env_idx = env_idx
@@ -143,9 +153,17 @@ class AtariEnvironment(Environment):
         self.p = p
 
         self.history_size = history_size
+        self.video_size = video_size
+        self.patch_size = patch_size
+        self.video_h = video_h
+        self.video_w = video_w
+        self.patch_h = patch_h
+        self.patch_w = patch_w
         self.history = np.zeros([history_size, h, w])
+        self.video = np.zeros([video_size, video_h, video_w])
         self.h = h
         self.w = w
+        self.device=device
 
         self.reset()
 
@@ -164,29 +182,34 @@ class AtariEnvironment(Environment):
                 self.last_action = action
 
             s, reward, done, info = self.env.step(action)
-
+            # print(s.shape)
             if max_step_per_episode < self.steps:
                 done = True
 
             log_reward = reward
             force_done = done
 
-            self.history[:3, :, :] = self.history[1:, :, :]
-            self.history[3, :, :] = self.pre_proc(s)
+            self.history[:self.history_size-1, :, :] = self.history[1:, :, :]
+            self.history[self.history_size-1, :, :] = self.pre_proc(s)
+
+
+            self.video[:self.video_size-1, :, :] = self.video[1:, :, :]
+            self.video[self.video_size-1, :, :] = self.to_patch(s)
 
             self.rall += reward
             self.steps += 1
-
+            
             if done:
                 self.recent_rlist.append(self.rall)
                 print("[Episode {}({})] Step: {}  Reward: {}  Recent Reward: {}  Visited Room: [{}]".format(
                     self.episode, self.env_idx, self.steps, self.rall, np.mean(self.recent_rlist),
                     info.get('episode', {}).get('visited_rooms', {})))
 
-                self.history = self.reset()
+                self.history,self.video = self.reset()
+            # print(self.video.shape)
 
             self.child_conn.send(
-                [self.history[:, :, :], reward, force_done, done, log_reward])
+                [self.history[:, :, :], reward, force_done, done, log_reward,self.video])
 
     def reset(self):
         self.last_action = 0
@@ -195,9 +218,24 @@ class AtariEnvironment(Environment):
         self.rall = 0
         s = self.env.reset()
         self.get_init_state(
-            self.pre_proc(s))
-        return self.history[:, :, :]
+            self.pre_proc(s),s)
+        return self.history[:, :, :],self.video[:,:,:]
 
+    def to_patch(self, X):
+        '''
+        Input is T x C x H x W,
+        Output is T x NxC x h x w, 
+        '''
+        x=np.array(Image.fromarray(X).convert('L')).astype('float32')
+        x =cv2.resize(x, (self.video_h, self.video_w))
+        # print(x.shape)
+        
+        # for i in range(self.patch_size):
+        #     for j in range(self.patch_size):
+        #         out[i*self.patch_size+j]=x[:,i*32:i*32+64,j*32:j*32+64]
+        # print(out.shape)
+        return x
+        
     def pre_proc(self, X):
         X = np.array(Image.fromarray(X).convert('L')).astype('float32')
         x = cv2.resize(X, (self.h, self.w))
@@ -206,6 +244,13 @@ class AtariEnvironment(Environment):
     def get_init_state(self, s):
         for i in range(self.history_size):
             self.history[i, :, :] = self.pre_proc(s)
+
+    def get_init_state(self, s,sv):
+        for i in range(self.history_size):
+            self.history[i, :, :] = self.pre_proc(s)
+        for i in range(self.video_size):
+            self.video[i,:, :] = self.to_patch(sv)
+
 
 
 class MarioEnvironment(Process):
@@ -216,9 +261,16 @@ class MarioEnvironment(Process):
             env_idx,
             child_conn,
             history_size=4,
+            video_size=16,
+            patch_size=4,
             life_done=False,
             h=84,
-            w=84, movement=COMPLEX_MOVEMENT, sticky_action=True,
+            w=84,
+            video_h=160,
+            video_w=160,
+            patch_h=64,
+            patch_w=64,
+            movement=COMPLEX_MOVEMENT, sticky_action=True,
             p=0.25):
         super(MarioEnvironment, self).__init__()
         self.daemon = True
@@ -239,7 +291,13 @@ class MarioEnvironment(Process):
         self.p = p
 
         self.history_size = history_size
+        self.video_size = video_size
+        self.video_h = video_h
+        self.video_w = video_w
+        self.patch_h = patch_h
+        self.patch_w = patch_w
         self.history = np.zeros([history_size, h, w])
+        self.video = np.zeros([video_size,patch_size**2,3, patch_h, patch_w])
         self.h = h
         self.w = w
 
@@ -290,6 +348,9 @@ class MarioEnvironment(Process):
             self.history[:3, :, :] = self.history[1:, :, :]
             self.history[3, :, :] = self.pre_proc(obs)
 
+            self.video[:self.video_size-1, :, :] = self.video[1:, :, :]
+            self.video[self.video_size-1, :, :] = self.to_patch(obs)
+
             self.steps += 1
 
             if done:
@@ -321,6 +382,20 @@ class MarioEnvironment(Process):
         self.get_init_state(self.env.reset())
         return self.history[:, :, :]
 
+    def to_patch(self, x):
+        '''
+        Input is T x C x H x W,
+        Output is T x NxC x h x w, 
+        '''
+        x = cv2.resize(x, (self.video_h, self.video_w,3)).permute(-1,0,1)
+        out=torch.zeros([self.patch_size**2,3, self.patch_h, self.patch_w],device=x.device,dtype=x.dtype)
+        
+        for i in range(self.patch_size):
+            for j in range(self.patch_size):
+                out[i*self.patch_size+j]=x[:,i*32:i*32+64,j*32:j*32+64]
+        return out
+        
+        
     def pre_proc(self, X):
         # grayscaling
         x = cv2.cvtColor(X, cv2.COLOR_RGB2GRAY)
@@ -329,6 +404,8 @@ class MarioEnvironment(Process):
 
         return x
 
-    def get_init_state(self, s):
+    def get_init_state(self, s,sv):
         for i in range(self.history_size):
             self.history[i, :, :] = self.pre_proc(s)
+        for i in range(self.video_size):
+            self.video[i,:, :, :] = self.to_patch(sv)

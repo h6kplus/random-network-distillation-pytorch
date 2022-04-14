@@ -368,7 +368,7 @@ class CRW(nn.Module):
         walks = dict()
         As = self.affinity(q[:, :, :-1], q[:, :, 1:])
         A12s = [self.stoch_mat(As[:, i], do_dropout=True) for i in range(T-1)]
-
+        # print("A12s",len(A12s))
         #################################################### Palindromes
         if not self.sk_targets:  
             A21s = [self.stoch_mat(As[:, i].transpose(-1, -2), do_dropout=True) for i in range(T-1)]
@@ -378,11 +378,11 @@ class CRW(nn.Module):
                 aar = aal = g[0]
                 for _a in g[1:]:
                     aar, aal = aar @ _a, _a @ aal
-
+            
                 AAs.append((f"l{i}", aal) if self.flip else (f"r{i}", aar))
     
             for i, aa in AAs:
-                walks[f"cyc {i}"] = [aa, self.xent_targets(aa)]
+                walks[f"cyc {i}"] = [aa, self.xent_targets_entropy(aa)]
 
         #################################################### Sinkhorn-Knopp Target (experimental)
         else:   
@@ -400,14 +400,20 @@ class CRW(nn.Module):
         xents = [torch.tensor([0.]).to(self.args.device)]
         diags = dict()
 
+        # for name, (A, target) in walks.items():
+        #     loss = ((A.reshape(B,-1)- target.reshape(B,-1))**2).mean(dim=-1)
+        #     diags.update({f"{H} xent {name}": loss.detach()})
+        #     xents += [loss]
+
         for name, (A, target) in walks.items():
             logits = torch.log(A+EPS).flatten(0, -2)
-            loss = self.xent(logits, target).mean()
-            acc = (torch.argmax(logits, dim=-1) == target).float().mean()
-            diags.update({f"{H} xent {name}": loss.detach(),
-                          f"{H} acc {name}": acc})
+            loss = self.xent(logits, target)
+            loss = loss.reshape(B,-1)
+            loss=loss.mean(dim=-1)
+
+            diags.update({f"{H} xent {name}": loss.detach()})
             xents += [loss]
-        print(len(xents))
+
         #################################################################
         # Visualizations
         #################################################################
@@ -420,7 +426,7 @@ class CRW(nn.Module):
         loss = sum(xents)/max(1, len(xents)-1)
         return q, loss, diags
 
-    def xent_targets(self, A):
+    def xent_targets_entropy(self, A):
         B, N = A.shape[:2]
         key = '%s:%sx%s' % (str(A.device), B,N)
 
@@ -428,6 +434,16 @@ class CRW(nn.Module):
             I = torch.arange(A.shape[-1])[None].repeat(B, 1)
             self._xent_targets[key] = I.view(-1).to(A.device)
 
+        return self._xent_targets[key]
+
+    def xent_targets(self, A):
+        B, N = A.shape[:2]
+        key = '%s:%sx%s' % (str(A.device), B,N)
+
+        if key not in self._xent_targets:
+            I =  torch.stack([torch.eye(A.shape[-1])]*B,dim=0)
+            # torch.arange(A.shape[-1])[None].repeat(B, 1)
+            self._xent_targets[key] = I.to(A.device)
         return self._xent_targets[key]
 
     def visualize_patches(self, x, q):

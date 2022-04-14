@@ -138,7 +138,7 @@ def main():
             parent_conn.send(action)
 
         for parent_conn in parent_conns:
-            s, r, d, rd, lr = parent_conn.recv()
+            s, r, d, rd, lr,v = parent_conn.recv()
             next_obs.append(s[3, :, :].reshape([1, 84, 84]))
 
         if len(next_obs) % (num_step * num_worker) == 0:
@@ -148,8 +148,8 @@ def main():
     print('End to initalize...')
 
     while True:
-        total_state, total_reward, total_done, total_next_state, total_action, total_int_reward, total_next_obs, total_ext_values, total_int_values, total_policy, total_policy_np = \
-            [], [], [], [], [], [], [], [], [], [], []
+        total_video,total_state, total_reward, total_done, total_next_state, total_action, total_int_reward, total_next_obs, total_ext_values, total_int_values, total_policy, total_policy_np = \
+            [], [], [], [], [], [], [], [], [], [], [],[]
         global_step += (num_worker * num_step)
         global_update += 1
 
@@ -160,14 +160,15 @@ def main():
             for parent_conn, action in zip(parent_conns, actions):
                 parent_conn.send(action)
 
-            next_states, rewards, dones, real_dones, log_rewards, next_obs = [], [], [], [], [], []
+            next_states, rewards, dones, real_dones, log_rewards, next_obs,videos =[], [], [], [], [], [], []
             for parent_conn in parent_conns:
-                s, r, d, rd, lr = parent_conn.recv()
+                s, r, d, rd, lr,v = parent_conn.recv()
                 next_states.append(s)
                 rewards.append(r)
                 dones.append(d)
                 real_dones.append(rd)
                 log_rewards.append(lr)
+                videos.append(v)
                 next_obs.append(s[3, :, :].reshape([1, 84, 84]))
 
             next_states = np.stack(next_states)
@@ -175,10 +176,16 @@ def main():
             dones = np.hstack(dones)
             real_dones = np.hstack(real_dones)
             next_obs = np.stack(next_obs)
+            videos=np.stack(videos)
+            print(videos.shape)
 
             # total reward = int reward + ext Reward
             intrinsic_reward = agent.compute_intrinsic_reward(
                 ((next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5))
+            # TODO
+            # change to 
+            
+            
             intrinsic_reward = np.hstack(intrinsic_reward)
             sample_i_rall += intrinsic_reward[sample_env_idx]
 
@@ -186,6 +193,7 @@ def main():
             total_int_reward.append(intrinsic_reward)
             total_state.append(states)
             total_reward.append(rewards)
+            total_video.append(videos)
             total_done.append(dones)
             total_action.append(actions)
             total_ext_values.append(value_ext)

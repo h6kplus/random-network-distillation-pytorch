@@ -292,12 +292,13 @@ def make_encoder(args):
 
     elif model_type == 'scratch_zeropad':
         net = resnet.resnet18()
-
+ 
     elif model_type == 'imagenet18':
         net = resnet.resnet18(pretrained=True)
 
     elif model_type == 'imagenet50':
         net = resnet.resnet50(pretrained=True)
+
 
     elif model_type == 'moco50':
         net = resnet.resnet50(pretrained=False)

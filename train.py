@@ -93,7 +93,7 @@ def main():
         use_gae=use_gae,
         use_noisy_net=use_noisy_net
     )
-    print(use_cuda)
+    print("CUDA",use_cuda)
     # if is_load_model:
     #     print('load model...')
     #     if use_cuda:
@@ -171,22 +171,31 @@ def main():
                 videos.append(v)
                 next_obs.append(s[3, :, :].reshape([1, 84, 84]))
 
+
             next_states = np.stack(next_states)
             rewards = np.hstack(rewards)
             dones = np.hstack(dones)
             real_dones = np.hstack(real_dones)
             next_obs = np.stack(next_obs)
             videos=np.stack(videos)
-            print(videos.shape)
+            
+            B,T,H,W=videos.shape #160*160
+            C=16
+            stride=32
+            v_patches=np.zeros([B,T,C,64,64])
+            for i in range(4):
+                for j in range(4):
+                    v_patches[:,:,4*i+j,:,:]=  videos[:,:,i*stride:i*stride+64,j*stride:j*stride+64]
+            videos=v_patches
 
             # total reward = int reward + ext Reward
-            intrinsic_reward = agent.compute_intrinsic_reward(
-                ((next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5))
-            print(((next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5).shape)
-            print(intrinsic_reward.shape)
+            # intrinsic_reward = agent.compute_intrinsic_reward(
+                # ((next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5))
+            # print(((next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5).shape)
+            # print(intrinsic_reward.shape)
             # TODO
             # change to video input
-            
+            intrinsic_reward=agent.compute_intrinsic_reward(v_patches)
             
             intrinsic_reward = np.hstack(intrinsic_reward)
             sample_i_rall += intrinsic_reward[sample_env_idx]
@@ -228,10 +237,12 @@ def main():
         total_action = np.stack(total_action).transpose().reshape([-1])
         total_done = np.stack(total_done).transpose()
         total_next_obs = np.stack(total_next_obs).transpose([1, 0, 2, 3, 4]).reshape([-1, 1, 84, 84])
+
         total_ext_values = np.stack(total_ext_values).transpose()
         total_int_values = np.stack(total_int_values).transpose()
         total_logging_policy = np.vstack(total_policy_np)
-
+        total_video=np.stack(total_video).transpose([1, 0, 2, 3, 4, 5]).reshape([-1,T,16,64,64])
+        
         # Step 2. calculate intrinsic reward
         # running mean intrinsic reward
         total_int_reward = np.stack(total_int_reward).transpose()
@@ -286,8 +297,7 @@ def main():
             
             
         agent.train_model(np.float32(total_state) / 255., ext_target, int_target, total_action,
-                          total_adv, ((total_next_obs - obs_rms.mean) / np.sqrt(obs_rms.var)).clip(-5, 5),
-                          total_policy)
+                          total_adv, total_video, total_policy)
 
         if global_step % (num_worker * num_step * 100) == 0:
             print('Now Global Step :{}'.format(global_step))

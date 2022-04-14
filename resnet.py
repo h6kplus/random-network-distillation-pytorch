@@ -37,8 +37,10 @@ class ResNet(torch_resnet.ResNet):
         remove_layers += ['fc', 'avgpool']
         for layer in filter_layers(remove_layers):
             setattr(self, layer, None)
-
+        self.projector=nn.Conv2d(1, 3, kernel_size=1, stride=1, padding=0,
+                               bias=False)
     def forward(self, x):
+        x = self.projector(x)
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)

@@ -75,22 +75,20 @@ class RNDAgent(object):
         r = np.expand_dims(np.random.rand(p.shape[1 - axis]), axis=axis)
         return (p.cumsum(axis=axis) > r).argmax(axis=axis)
 
-    def compute_intrinsic_reward(self, next_obs):
-        #TODO
-        next_obs = torch.FloatTensor(next_obs).to(self.device)
-
-        print(next_obs.shape)
-        intrinsic_reward =  self.crw.forward(next_obs)
+    def compute_intrinsic_reward(self, v_patches):
+        #V_patches: (B, T, 16, 64, 64)
+        v_patches = torch.FloatTensor(v_patches).to(self.device)
+        intrinsic_reward =  self.crw.forward(v_patches)
 
         return intrinsic_reward.data.cpu().numpy()
 
-    def train_model(self, s_batch, target_ext_batch, target_int_batch, y_batch, adv_batch, next_obs_batch, old_policy):
+    def train_model(self, s_batch, target_ext_batch, target_int_batch, y_batch, adv_batch, video_batch, old_policy):
         s_batch = torch.FloatTensor(s_batch).to(self.device)
         target_ext_batch = torch.FloatTensor(target_ext_batch).to(self.device)
         target_int_batch = torch.FloatTensor(target_int_batch).to(self.device)
         y_batch = torch.LongTensor(y_batch).to(self.device)
         adv_batch = torch.FloatTensor(adv_batch).to(self.device)
-        next_obs_batch = torch.FloatTensor(next_obs_batch).to(self.device)
+        video_batch = torch.FloatTensor(video_batch).to(self.device)
 
         sample_range = np.arange(len(s_batch))
         forward_mse = nn.MSELoss(reduction='none')
@@ -107,20 +105,14 @@ class RNDAgent(object):
             np.random.shuffle(sample_range)
             for j in range(int(len(s_batch) / self.batch_size)):
                 sample_idx = sample_range[self.batch_size * j:self.batch_size * (j + 1)]
-                print(sample_idx.shape)
                 # --------------------------------------------------------------------------------
                 # for Curiosity-driven(Random Network Distillation)
-                predict_next_state_feature, target_next_state_feature = self.rnd(next_obs_batch[sample_idx])
-                print(predict_next_state_feature.shape)
+                # predict_next_state_feature, target_next_state_feature = self.rnd(next_obs_batch[sample_idx])
+                # print(predict_next_state_feature.shape)
+                videos=video_batch[sample_idx]
 
-                forward_loss = forward_mse(predict_next_state_feature, target_next_state_feature.detach()).mean(-1)
-                # Proportion of exp used for predictor update
-                mask = torch.rand(len(forward_loss)).to(self.device)
-                mask = (mask < self.update_proportion).type(torch.FloatTensor).to(self.device)
-                forward_loss = (forward_loss * mask).sum() / torch.max(mask.sum(), torch.Tensor([1]).to(self.device))
-                print(forward_loss)
-                # TODO
-                # change to CRW forward loss
+                # changed to CRW forward loss
+                forward_loss = self.crw(videos).mean()
                 # ---------------------------------------------------------------------------------
 
                 policy, value_ext, value_int = self.model(s_batch[sample_idx])
@@ -146,5 +138,5 @@ class RNDAgent(object):
                 self.optimizer.zero_grad()
                 loss = actor_loss + 0.5 * critic_loss - self.ent_coef * entropy + forward_loss
                 loss.backward()
-                global_grad_norm_(list(self.model.parameters())+list(self.rnd.predictor.parameters()))
+                global_grad_norm_(list(self.model.parameters())+list(self.crw.encoder.parameters()))
                 self.optimizer.step()

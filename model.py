@@ -246,7 +246,6 @@ class CRW(nn.Module):
         self.edgedrop_rate = getattr(args, 'dropout', 0)
         self.featdrop_rate = getattr(args, 'featdrop', 0)
         self.temperature = getattr(args, 'temp', getattr(args, 'temperature', 0.07))
-
         self.encoder = utils.make_encoder(args).to(self.args.device)
         self.infer_dims()
         self.selfsim_fc = self.make_head(depth=getattr(args, 'head_depth', 0))
@@ -262,9 +261,10 @@ class CRW(nn.Module):
         self.vis = vis
 
     def infer_dims(self):
-        in_sz = 256
-        dummy = torch.zeros(1, 3, 1, in_sz, in_sz).to(next(self.encoder.parameters()).device)
+        in_sz = 160
+        dummy = torch.zeros(1, 1, 1, in_sz, in_sz).to(next(self.encoder.parameters()).device)
         dummy_out = self.encoder(dummy)
+        print(dummy_out.shape)
         self.enc_hid_dim = dummy_out.shape[1]
         self.map_scale = in_sz // dummy_out.shape[-1]
 
@@ -349,7 +349,7 @@ class CRW(nn.Module):
            N=1 -> list of images
         '''
         B, T, C, H, W = x.shape
-        _N, C = C//3, 3
+        _N, C = C, 1
     
         #################################################################
         # Pixels to Nodes 
@@ -424,7 +424,7 @@ class CRW(nn.Module):
                     self.visualize_patches(x, q)
 
         loss = sum(xents)/max(1, len(xents)-1)
-        return q, loss, diags
+        return loss
 
     def xent_targets_entropy(self, A):
         B, N = A.shape[:2]

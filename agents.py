@@ -47,6 +47,11 @@ class RNDAgent(object):
         self.device = torch.device('cuda' if use_cuda else 'cpu')
 
         self.rnd = RNDModel(input_size, output_size)
+        
+        #TODO 
+        # change to CRW model
+        
+        
         self.optimizer = optim.Adam(list(self.model.parameters()) + list(self.rnd.predictor.parameters()),
                                     lr=learning_rate)
         self.rnd = self.rnd.to(self.device)
@@ -100,16 +105,20 @@ class RNDAgent(object):
             np.random.shuffle(sample_range)
             for j in range(int(len(s_batch) / self.batch_size)):
                 sample_idx = sample_range[self.batch_size * j:self.batch_size * (j + 1)]
-
+                print(sample_idx.shape)
                 # --------------------------------------------------------------------------------
                 # for Curiosity-driven(Random Network Distillation)
                 predict_next_state_feature, target_next_state_feature = self.rnd(next_obs_batch[sample_idx])
+                print(predict_next_state_feature.shape)
 
                 forward_loss = forward_mse(predict_next_state_feature, target_next_state_feature.detach()).mean(-1)
                 # Proportion of exp used for predictor update
                 mask = torch.rand(len(forward_loss)).to(self.device)
                 mask = (mask < self.update_proportion).type(torch.FloatTensor).to(self.device)
                 forward_loss = (forward_loss * mask).sum() / torch.max(mask.sum(), torch.Tensor([1]).to(self.device))
+                print(forward_loss)
+                # TODO
+                # change to CRW forward loss
                 # ---------------------------------------------------------------------------------
 
                 policy, value_ext, value_int = self.model(s_batch[sample_idx])

@@ -6,7 +6,7 @@ import numpy as np
 import math
 from torch.nn import init
 import utils
-
+import arguments
 class NoisyLinear(nn.Module):
     """Factorised Gaussian NoisyNet"""
 
@@ -407,7 +407,7 @@ class CRW(nn.Module):
             diags.update({f"{H} xent {name}": loss.detach(),
                           f"{H} acc {name}": acc})
             xents += [loss]
-
+        print(len(xents))
         #################################################################
         # Visualizations
         #################################################################
@@ -418,7 +418,6 @@ class CRW(nn.Module):
                     self.visualize_patches(x, q)
 
         loss = sum(xents)/max(1, len(xents)-1)
-        
         return q, loss, diags
 
     def xent_targets(self, A):
@@ -450,3 +449,10 @@ class CRW(nn.Module):
         xent_loss = self.xent(torch.log(AA + EPS).flatten(0, -2), self.xent_targets(AA))
 
         utils.visualize.frame_pair(x, q, mm, t1, t2, A, AA, xent_loss, self.vis.vis)
+
+if __name__ == "__main__":
+    args=arguments.train_args()
+    model = CRW(args=args)
+    # B x T x N*C x H x W
+    x = torch.rand([10,5,3,64,64])
+    model.forward(x)

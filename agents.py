@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.fft import next_fast_len
 
 import torch.nn.functional as F
 import torch.nn as nn
@@ -6,8 +7,9 @@ import torch
 import torch.optim as optim
 
 from torch.distributions.categorical import Categorical
+from arguments import train_args
 
-from model import CnnActorCriticNetwork, RNDModel
+from model import CnnActorCriticNetwork, RNDModel,CRW
 from utils import global_grad_norm_
 
 
@@ -46,15 +48,15 @@ class RNDAgent(object):
         self.update_proportion = update_proportion
         self.device = torch.device('cuda' if use_cuda else 'cpu')
 
-        self.rnd = RNDModel(input_size, output_size)
-        
+        # self.rnd = RNDModel(input_size, output_size)
+        self.crw = CRW(train_args())
         #TODO 
         # change to CRW model
         
         
-        self.optimizer = optim.Adam(list(self.model.parameters()) + list(self.rnd.predictor.parameters()),
+        self.optimizer = optim.Adam(list(self.model.parameters()) + list(self.crw.encoder.parameters()),
                                     lr=learning_rate)
-        self.rnd = self.rnd.to(self.device)
+        self.crw = self.crw.to(self.device)
 
         self.model = self.model.to(self.device)
 
@@ -74,13 +76,11 @@ class RNDAgent(object):
         return (p.cumsum(axis=axis) > r).argmax(axis=axis)
 
     def compute_intrinsic_reward(self, next_obs):
+        #TODO
         next_obs = torch.FloatTensor(next_obs).to(self.device)
 
-        target_next_feature = self.rnd.target(next_obs)
-        predict_next_feature = self.rnd.predictor(next_obs)
-        intrinsic_reward = (target_next_feature - predict_next_feature).pow(2).sum(1) / 2
-        # TODO
-        # change to CRW forward loss
+        print(next_obs.shape)
+        intrinsic_reward =  self.crw.forward(next_obs)
 
         return intrinsic_reward.data.cpu().numpy()
 

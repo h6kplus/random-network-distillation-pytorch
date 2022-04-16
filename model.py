@@ -470,5 +470,5 @@ if __name__ == "__main__":
     args=arguments.train_args()
     model = CRW(args=args)
     # B x T x N*C x H x W
-    x = torch.rand([10,5,3,64,64])
-    model.forward(x)
+    x = torch.rand([10,3,16,64,64])
+    print(model.forward(x))

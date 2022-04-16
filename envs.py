@@ -121,7 +121,7 @@ class AtariEnvironment(Environment):
             env_idx,
             child_conn,
             history_size=4,
-            video_size=2,
+            video_size=3,
             patch_size=4,
             life_done=False,
             h=84,

@@ -195,7 +195,8 @@ def main():
             # print(intrinsic_reward.shape)
             # TODO
             # change to video input
-            intrinsic_reward=agent.compute_intrinsic_reward(v_patches)
+            intrinsic_reward=agent.compute_intrinsic_reward(videos)
+            # print(intrinsic_reward)
             
             intrinsic_reward = np.hstack(intrinsic_reward)
             sample_i_rall += intrinsic_reward[sample_env_idx]

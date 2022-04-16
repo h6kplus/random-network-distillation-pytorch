@@ -77,8 +77,11 @@ class RNDAgent(object):
 
     def compute_intrinsic_reward(self, v_patches):
         #V_patches: (B, T, 16, 64, 64)
+        # print(v_patches.shape)
         v_patches = torch.FloatTensor(v_patches).to(self.device)
+        # print(v_patches.shape)
         intrinsic_reward =  self.crw.forward(v_patches)
+        # print(intrinsic_reward)
 
         return intrinsic_reward.data.cpu().numpy()
 

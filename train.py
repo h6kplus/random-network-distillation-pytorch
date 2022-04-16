@@ -242,7 +242,6 @@ def main():
         total_int_values = np.stack(total_int_values).transpose()
         total_logging_policy = np.vstack(total_policy_np)
         total_video=np.stack(total_video).transpose([1, 0, 2, 3, 4, 5]).reshape([-1,T,16,64,64])
-        
         # Step 2. calculate intrinsic reward
         # running mean intrinsic reward
         total_int_reward = np.stack(total_int_reward).transpose()
@@ -302,8 +301,7 @@ def main():
         if global_step % (num_worker * num_step * 100) == 0:
             print('Now Global Step :{}'.format(global_step))
             torch.save(agent.model.state_dict(), model_path)
-            torch.save(agent.rnd.predictor.state_dict(), predictor_path)
-            torch.save(agent.rnd.target.state_dict(), target_path)
+            torch.save(agent.crw.encoder.state_dict(), predictor_path)
 
 
 if __name__ == '__main__':

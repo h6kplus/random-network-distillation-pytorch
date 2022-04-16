@@ -110,7 +110,7 @@ class RNDAgent(object):
                 # predict_next_state_feature, target_next_state_feature = self.rnd(next_obs_batch[sample_idx])
                 # print(predict_next_state_feature.shape)
                 videos=video_batch[sample_idx]
-
+                
                 # changed to CRW forward loss
                 forward_loss = self.crw(videos).mean()
                 # ---------------------------------------------------------------------------------

@@ -80,7 +80,7 @@ def train_args():
 
     parser.add_argument('--data-path', default='/data/ajabri/kinetics/',
         help='/home/ajabri/data/places365_standard/train/ | /data/ajabri/kinetics/')
-    parser.add_argument('--device', default='cpu', help='device')
+    parser.add_argument('--device', default='cuda', help='device')
     parser.add_argument('--clip-len', default=8, type=int, metavar='N',
                         help='number of frames per clip')
     parser.add_argument('--clips-per-video', default=5, type=int, metavar='N',

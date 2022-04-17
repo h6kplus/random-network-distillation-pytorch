@@ -341,8 +341,60 @@ class CRW(nn.Module):
         maps  =  maps.view(B, N, *maps.shape[1:])
 
         return feats, maps
-
     def forward(self, x, just_feats=False,):
+        '''
+        Input is B x T x N*C x H x W, where either
+           N>1 -> list of patches of images
+           N=1 -> list of images
+        '''
+        B, T, C, H, W = x.shape
+        _N, C = C, 1
+        originalX=x.clone()
+        #################################################################
+        # Pixels to Nodes 
+        #################################################################
+        x = x.transpose(1, 2).view(B, _N, C, T, H, W)
+        q, mm = self.pixels_to_nodes(x)
+        B, C, T, N = q.shape
+
+        if just_feats:
+            h, w = np.ceil(np.array(x.shape[-2:]) / self.map_scale).astype(np.int)
+            return (q, mm) if _N > 1 else (q, q.view(*q.shape[:-1], h, w))
+
+        #################################################################
+        # Compute walks 
+        #################################################################
+        walks = dict()
+        As = self.affinity(q[:, :, :-1], q[:, :, 1:])
+        A12s = [self.stoch_mat(As[:, i], do_dropout=True) for i in range(T-1)]
+        #################################################### Palindromes
+        local_patch_idx=None
+        if not self.sk_targets:  
+            A21s = [self.stoch_mat(As[:, i].transpose(-1, -2), do_dropout=True) for i in range(T-1)]
+            AAs = []
+            for i in list(range(1, len(A12s))):
+                g = A12s[:i+1] + A21s[:i+1][::-1]
+                aar = aal = g[0]
+                for _a in g[1:]:
+                    aar, aal = aar @ _a, _a @ aal
+                AAs.append((f"l{i}", aal) if self.flip else (f"r{i}", aar))
+            for i, aa in AAs:
+                tmp=torch.max(aa,dim=-1)[0]
+                local_patch_idx=torch.argmin(tmp,dim=-1)
+                walks[f"cyc {i}"] = [aa, self.xent_targets_entropy(aa)]
+        local_videos=originalX[torch.arange(B),:,local_patch_idx,:,:]
+
+        B,T,H,W=local_videos.shape #160*160
+        C=16
+        stride=16
+        v_patches=torch.zeros([B,T,C,16,16],device=local_videos.device)
+        for i in range(4):
+            for j in range(4):
+                v_patches[:,:,4*i+j,:,:]=  local_videos[:,:,i*stride:i*stride+16,j*stride:j*stride+16]
+
+        return self.forward_local(v_patches)
+
+    def forward_local(self, x, just_feats=False,):
         '''
         Input is B x T x N*C x H x W, where either
            N>1 -> list of patches of images
@@ -378,21 +430,20 @@ class CRW(nn.Module):
                 aar = aal = g[0]
                 for _a in g[1:]:
                     aar, aal = aar @ _a, _a @ aal
-            
                 AAs.append((f"l{i}", aal) if self.flip else (f"r{i}", aar))
     
             for i, aa in AAs:
                 walks[f"cyc {i}"] = [aa, self.xent_targets_entropy(aa)]
 
-        #################################################### Sinkhorn-Knopp Target (experimental)
-        else:   
-            a12, at = A12s[0], self.stoch_mat(A[:, 0], do_dropout=False, do_sinkhorn=True)
-            for i in range(1, len(A12s)):
-                a12 = a12 @ A12s[i]
-                at = self.stoch_mat(As[:, i], do_dropout=False, do_sinkhorn=True) @ at
-                with torch.no_grad():
-                    targets = utils.sinkhorn_knopp(at, tol=0.001, max_iter=10, verbose=False).argmax(-1).flatten()
-                walks[f"sk {i}"] = [a12, targets]
+        # #################################################### Sinkhorn-Knopp Target (experimental)
+        # else:   
+        #     a12, at = A12s[0], self.stoch_mat(A[:, 0], do_dropout=False, do_sinkhorn=True)
+        #     for i in range(1, len(A12s)):
+        #         a12 = a12 @ A12s[i]
+        #         at = self.stoch_mat(As[:, i], do_dropout=False, do_sinkhorn=True) @ at
+        #         with torch.no_grad():
+        #             targets = utils.sinkhorn_knopp(at, tol=0.001, max_iter=10, verbose=False).argmax(-1).flatten()
+        #         walks[f"sk {i}"] = [a12, targets]
 
         #################################################################
         # Compute loss 
@@ -410,7 +461,7 @@ class CRW(nn.Module):
             loss = self.xent(logits, target)
             loss = loss.reshape(B,-1)
             loss=loss.mean(dim=-1)
-
+            
             diags.update({f"{H} xent {name}": loss.detach()})
             xents += [loss]
 
@@ -468,7 +519,7 @@ class CRW(nn.Module):
 
 if __name__ == "__main__":
     args=arguments.train_args()
-    model = CRW(args=args)
+    model = CRW(args=args).to("cuda")
     # B x T x N*C x H x W
-    x = torch.rand([10,3,16,64,64])
+    x = torch.rand([10,3,16,64,64]).to("cuda")
     print(model.forward(x))

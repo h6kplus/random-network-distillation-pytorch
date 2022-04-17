@@ -13,44 +13,30 @@ model_urls = {'resnet18': 'https://download.pytorch.org/models/resnet18-5c106cde
     'resnet50': 'https://download.pytorch.org/models/resnet50-19c8e357.pth',
 }
 
+class Flatten(nn.Module):
+    def forward(self, input):
+        return input.view(input.size(0), -1)
+
 class ResNet(torch_resnet.ResNet):
     def __init__(self, *args, **kwargs):
         super(ResNet, self).__init__(*args, **kwargs)
 
     def modify(self, remove_layers=[], padding=''):
         # Set stride of layer3 and layer 4 to 1 (from 2)
-        filter_layers = lambda x: [l for l in x if getattr(self, l) is not None]
-        for layer in filter_layers(['layer3', 'layer4']):
-            for m in getattr(self, layer).modules():
-                if isinstance(m, torch.nn.Conv2d):
-                    m.stride = tuple(1 for _ in m.stride)
-                    print('stride', m)
-        # Set padding (zeros or reflect, doesn't change much; 
-        # zeros requires lower temperature)
-        if padding != '':
-            for m in self.modules():
-                if isinstance(m, torch.nn.Conv2d) and sum(m.padding) > 0:
-                    m.padding_mode = padding
-                    print('padding', m)
-
-        # Remove extraneous layers
-        remove_layers += ['fc', 'avgpool']
-        for layer in filter_layers(remove_layers):
-            setattr(self, layer, None)
-        self.projector=nn.Conv2d(1, 3, kernel_size=1, stride=1, padding=0,
-                               bias=False)
+        
+        self.conv1=nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, stride=2)
+        self.conv2=nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=2)
+        self.conv3=nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3,stride=1)
+        self.conv4=nn.Conv2d(in_channels=64, out_channels=64, kernel_size=1,stride=1)
+        self.relu= nn.LeakyReLU()
     def forward(self, x):
-        x = self.projector(x)
         x = self.conv1(x)
-        x = self.bn1(x)
         x = self.relu(x)
-        x = x if self.maxpool is None else self.maxpool(x) 
-
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = x if self.layer3 is None else self.layer3(x) 
-        x = x if self.layer4 is None else self.layer4(x) 
-    
+        x = self.conv2(x)
+        x = self.relu(x)
+        x = self.conv3(x)
+        x = self.relu(x)
+        x = self.conv4(x)
         return x        
 
 

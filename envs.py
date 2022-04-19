@@ -261,7 +261,7 @@ class MarioEnvironment(Process):
             env_idx,
             child_conn,
             history_size=4,
-            video_size=16,
+            video_size=3,
             patch_size=4,
             life_done=False,
             h=84,
@@ -276,7 +276,6 @@ class MarioEnvironment(Process):
         self.daemon = True
         self.env =  JoypadSpace(
             gym_super_mario_bros.make(env_id), COMPLEX_MOVEMENT)
-
         self.is_render = is_render
         self.env_idx = env_idx
         self.steps = 0
@@ -297,7 +296,7 @@ class MarioEnvironment(Process):
         self.patch_h = patch_h
         self.patch_w = patch_w
         self.history = np.zeros([history_size, h, w])
-        self.video = np.zeros([video_size,patch_size**2,3, patch_h, patch_w])
+        self.video = np.zeros([video_size, video_h, video_w])
         self.h = h
         self.w = w
 
@@ -305,6 +304,13 @@ class MarioEnvironment(Process):
 
     def run(self):
         super(MarioEnvironment, self).run()
+        # done = True
+        # for step in range(100):
+        #     if done:
+        #         state = self.env.reset()
+        #     state, reward, done, info = self.env.step(self.env.action_space.sample())
+        #     self.env.render()
+
         while True:
             action = self.child_conn.recv()
             if self.is_render:
@@ -367,9 +373,9 @@ class MarioEnvironment(Process):
                         info['x_pos'],
                         self.max_pos))
 
-                self.history = self.reset()
+                self.history,self.video = self.reset()
 
-            self.child_conn.send([self.history[:, :, :], r, force_done, done, log_reward])
+            self.child_conn.send([self.history[:, :, :], r, force_done, done, log_reward,self.video ])
 
     def reset(self):
         self.last_action = 0
@@ -380,20 +386,19 @@ class MarioEnvironment(Process):
         self.stage = 1
         self.max_pos = 0
         self.get_init_state(self.env.reset())
-        return self.history[:, :, :]
+        return self.history[:, :, :],self.video[:, :, :]
 
-    def to_patch(self, x):
+    def to_patch(self,X):
         '''
         Input is T x C x H x W,
         Output is T x NxC x h x w, 
         '''
-        x = cv2.resize(x, (self.video_h, self.video_w,3)).permute(-1,0,1)
-        out=torch.zeros([self.patch_size**2,3, self.patch_h, self.patch_w],device=x.device,dtype=x.dtype)
-        
-        for i in range(self.patch_size):
-            for j in range(self.patch_size):
-                out[i*self.patch_size+j]=x[:,i*32:i*32+64,j*32:j*32+64]
-        return out
+        x=np.array(Image.fromarray(X).convert('L')).astype('float32')
+        x =cv2.resize(x, (self.video_h, self.video_w))
+        # for i in range(self.patch_size):
+        #     for j in range(self.patch_size):
+        #         out[i*self.patch_size+j]=x[:,i*32:i*32+64,j*32:j*32+64]
+        return x
         
         
     def pre_proc(self, X):
@@ -404,8 +409,8 @@ class MarioEnvironment(Process):
 
         return x
 
-    def get_init_state(self, s,sv):
+    def get_init_state(self, s):
         for i in range(self.history_size):
             self.history[i, :, :] = self.pre_proc(s)
         for i in range(self.video_size):
-            self.video[i,:, :, :] = self.to_patch(sv)
+            self.video[i, :, :] = self.to_patch(s)

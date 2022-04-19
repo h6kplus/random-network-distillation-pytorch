@@ -16,14 +16,13 @@ def main():
     env_type = default_config['EnvType']
 
     if env_type == 'mario':
-        env = BinarySpaceToDiscreteSpaceEnv(gym_super_mario_bros.make(env_id), COMPLEX_MOVEMENT)
+        env = JoypadSpace(gym_super_mario_bros.make(env_id), COMPLEX_MOVEMENT)
     elif env_type == 'atari':
         env = gym.make(env_id)
     else:
         raise NotImplementedError
     input_size = env.observation_space.shape  # 4
     output_size = env.action_space.n  # 2
-
     if 'Breakout' in env_id:
         output_size -= 1
 
@@ -111,7 +110,7 @@ def main():
     child_conns = []
     for idx in range(num_worker):
         parent_conn, child_conn = Pipe()
-        work = env_type(env_id, is_render, idx, child_conn, sticky_action=sticky_action, p=action_prob,
+        work = MarioEnvironment(env_id, is_render, idx, child_conn, sticky_action=sticky_action, p=action_prob,
                         life_done=life_done)
         work.start()
         works.append(work)
